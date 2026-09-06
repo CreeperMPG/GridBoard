@@ -1,0 +1,182 @@
+﻿<Window x:Class="GridBoard.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:GridBoard"
+        xmlns:ikw="http://schemas.inkore.net/lib/ui/wpf"
+        xmlns:ui="http://schemas.inkore.net/lib/ui/wpf/modern"
+        mc:Ignorable="d"
+        WindowState="Normal" 
+        WindowStyle="None" 
+        ResizeMode="NoResize"
+        Loaded="Window_Loaded"
+        Title="GridBoard" Height="450" Width="800" Closing="Window_Closing" Background="Black">
+    <Grid>
+        <InkCanvas x:Name="AppCanvas" Background="Black" StrokeCollected="AppCanvas_StrokeCollected" StrokeErased="AppCanvas_StrokeErased"/>
+        <Grid IsHitTestVisible="False">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="2" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="2" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="16" /><!---底部像素预留-->
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="2" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="2" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- 水平线 1 -->
+            <Rectangle Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="5"
+                   Fill="White" IsHitTestVisible="False" />
+            <!-- 水平线 2 -->
+            <Rectangle Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="5"
+                   Fill="White" IsHitTestVisible="False" />
+            <!-- 垂直线 1 -->
+            <Rectangle Grid.Row="0" Grid.Column="1" Grid.RowSpan="5"
+                   Fill="White" IsHitTestVisible="False" />
+            <!-- 垂直线 2 -->
+            <Rectangle Grid.Row="0" Grid.Column="3" Grid.RowSpan="5"
+                   Fill="White" IsHitTestVisible="False" />
+        </Grid>
+        <Border VerticalAlignment="Bottom" HorizontalAlignment="Center" Background="White" CornerRadius="12" Margin="12">
+            <ui:CommandBar DefaultLabelPosition="Bottom" PreviewMouseUp="CommandBar_PreviewMouseUp" PreviewTouchUp="CommandBar_PreviewTouchUp">
+                <ui:CommandBar.PrimaryCommands>
+                    <ui:AppBarButton Label="无" Name="NoneButton" Click="NoneButton_Click">
+                        <ui:AppBarButton.Icon>
+                            <ui:FontIcon Name="NoneButtonIcon" Icon="{x:Static ui:FluentSystemIcons.ProjectionScreenText_24_Filled}"/>
+                        </ui:AppBarButton.Icon>
+                    </ui:AppBarButton>
+                    <ui:AppBarButton Label="笔" Name="PenButton" Click="PenButton_Click">
+                        <ui:AppBarButton.Icon>
+                            <ui:FontIcon Name="PenButtonIcon" Icon="{x:Static ui:FluentSystemIcons.Pen_24_Regular}"/>
+                        </ui:AppBarButton.Icon>
+                        <ui:FlyoutService.Flyout>
+                            <ui:Flyout>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition/>
+                                        <ColumnDefinition Width="8"/>
+                                        <ColumnDefinition/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Text="粗细" Grid.Column="0" Grid.Row="0" Margin="0,0,0,8"/>
+                                    <TextBlock Text="颜色" Grid.Column="2" Grid.Row="0" HorizontalAlignment="Left" Margin="8,0,0,8"/>
+                                    <ui:GridView Grid.Column="0" Grid.Row="1" SelectedIndex="0" Name="PenSizeSelector" IsItemClickEnabled="True" ItemClick="PenSizeSelector_ItemClick">
+                                        <ui:GridView.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <UniformGrid Columns="1" />
+                                            </ItemsPanelTemplate>
+                                        </ui:GridView.ItemsPanel>
+                                        <ui:FontIcon Icon="{x:Static ui:FluentSystemIcons.InkStroke_24_Regular}" Tag="1"/>
+                                        <ui:FontIcon Icon="{x:Static ui:FluentSystemIcons.InkStroke_24_Filled}" Tag="2"/>
+                                        <ui:FontIcon Icon="{x:Static ui:FluentSystemIcons.InkStroke_24_Filled}" FontWeight="Bold" Tag="3"/>
+                                    </ui:GridView>
+                                    <ui:GridView Grid.Column="2" Grid.Row="1" SelectedIndex="0" Name="ColorSelector" IsItemClickEnabled="True" ItemClick="ColorSelector_ItemClick">
+                                        <ui:GridView.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <UniformGrid Columns="4" />
+                                            </ItemsPanelTemplate>
+                                        </ui:GridView.ItemsPanel>
+                                        <ui:GridView.Resources>
+                                            <Style TargetType="Rectangle">
+                                                <Setter Property="Width" Value="30" />
+                                                <Setter Property="Height" Value="30" />
+                                                <Setter Property="RadiusX" Value="4" />
+                                                <Setter Property="RadiusY" Value="4" />
+                                            </Style>
+                                        </ui:GridView.Resources>
+                                        <ui:GridView.Items>
+                                            <Rectangle Fill="White"/>
+                                            <Rectangle Fill="Red"/>
+                                            <Rectangle Fill="Orange"/>
+                                            <Rectangle Fill="Yellow"/>
+                                            <Rectangle Fill="Green"/>
+                                            <Rectangle Fill="Blue"/>
+                                            <Rectangle Fill="Indigo"/>
+                                            <Rectangle Fill="Violet"/>
+                                            <Rectangle Fill="Gray"/>
+                                            <Rectangle Fill="SkyBlue"/>
+                                            <Rectangle Fill="Azure"/>
+                                            <Rectangle Fill="Chocolate"/>
+                                        </ui:GridView.Items>
+                                    </ui:GridView>
+                                </Grid>
+                            </ui:Flyout>
+                        </ui:FlyoutService.Flyout>
+                    </ui:AppBarButton>
+                    <ui:AppBarButton Label="橡皮擦" Name="EraserButton" Click="EraserButton_Click" FlyoutOpeningMode="None">
+                        <ui:AppBarButton.Icon>
+                            <ui:FontIcon Name="EraserButtonIcon" Icon="{x:Static ui:FluentSystemIcons.Eraser_24_Regular}"/>
+                        </ui:AppBarButton.Icon>
+                        <ui:FlyoutService.Flyout>
+                            <ui:Flyout x:Name="EraserFlyout">
+                                <Border Background="LightGray" 
+                                      Width="300"
+                                      CornerRadius="8"
+                                      Name="ClearSliderContainer"
+                                      MouseLeftButtonDown="ClearSliderContainer_MouseLeftButtonDown"
+                                      MouseLeftButtonUp="ClearSliderContainer_MouseLeftButtonUp"
+                                      MouseMove="ClearSliderContainer_MouseMove"
+                                      TouchDown="ClearSliderContainer_TouchDown"
+                                        TouchMove="ClearSliderContainer_TouchMove"
+                                        TouchUp="ClearSliderContainer_TouchUp">
+                                    <TextBlock x:Name="ContentText" 
+                                       Text=">>> 拖动以清屏" 
+                                       HorizontalAlignment="Left"
+                                       Margin="8"
+                                       VerticalAlignment="Center"/>
+                                </Border>
+                            </ui:Flyout>
+                        </ui:FlyoutService.Flyout>
+                    </ui:AppBarButton>
+                    <!--
+                    <ui:AppBarButton Label="撤销" Name="UndoButton" Click="UndoButton_Click">
+                        <ui:AppBarButton.Icon>
+                            <ui:FontIcon Icon="{x:Static ui:FluentSystemIcons.ArrowUndo_24_Regular}"/>
+                        </ui:AppBarButton.Icon>
+                    </ui:AppBarButton>-->
+                </ui:CommandBar.PrimaryCommands>
+            </ui:CommandBar>
+        </Border>
+        <Border VerticalAlignment="Bottom" HorizontalAlignment="Left" Background="White" CornerRadius="12" Margin="12">
+            <ui:CommandBar DefaultLabelPosition="Bottom">
+                <ui:CommandBar.PrimaryCommands>
+                    <ui:AppBarButton Label="关闭" Name="CloseButton" Click="CloseButton_Click">
+                        <ui:AppBarButton.Icon>
+                            <ui:FontIcon Icon="{x:Static ui:FluentSystemIcons.ArrowExit_20_Regular}"/>
+                        </ui:AppBarButton.Icon>
+                    </ui:AppBarButton>
+                    <ui:AppBarButton Label="最小化" Name="MinimizeButton" Click="MinimizeButton_Click">
+                        <ui:AppBarButton.Icon>
+                            <ui:FontIcon Icon="{x:Static ui:FluentSystemIcons.ArrowMinimize_24_Regular}"/>
+                        </ui:AppBarButton.Icon>
+                    </ui:AppBarButton>
+                </ui:CommandBar.PrimaryCommands>
+            </ui:CommandBar>
+        </Border>
+        <Border VerticalAlignment="Bottom" HorizontalAlignment="Right" Background="White" CornerRadius="12" Margin="12">
+            <ikw:SimpleStackPanel Orientation="Horizontal">
+                <TextBlock Text="保存状态显示" VerticalAlignment="Center" Margin="16,0,0,0" Foreground="Gray" Name="LastSaved"/>
+                <ui:CommandBar DefaultLabelPosition="Bottom">
+                    <ui:CommandBar.PrimaryCommands>
+                        <ui:AppBarButton Label="保存" Name="SaveButton" Click="SaveButton_Click">
+                            <ui:AppBarButton.Icon>
+                                <ui:FontIcon Icon="{x:Static ui:FluentSystemIcons.Save_24_Regular}"/>
+                            </ui:AppBarButton.Icon>
+                        </ui:AppBarButton>
+                    </ui:CommandBar.PrimaryCommands>
+                </ui:CommandBar>
+            </ikw:SimpleStackPanel>
+        </Border>
+        <TextBlock HorizontalAlignment="Center" VerticalAlignment="Bottom" Text="Version 1.0" Foreground="Gray" FontSize="6" Margin="2"/>
+    </Grid>
+</Window>
