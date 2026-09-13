@@ -13,7 +13,7 @@
         Loaded="Window_Loaded"
         Title="GridBoard" Height="450" Width="800" Closing="Window_Closing" Background="Black">
     <Grid>
-        <InkCanvas x:Name="AppCanvas" Background="Black" StrokeCollected="AppCanvas_StrokeCollected" StrokeErased="AppCanvas_StrokeErased"/>
+        <local:VariableWidthInkCanvas x:Name="AppCanvas" Background="Black" StrokeCollected="AppCanvas_StrokeCollected" StrokeErased="AppCanvas_StrokeErased"/>
         <Grid IsHitTestVisible="False">
             <Grid.RowDefinitions>
                 <RowDefinition Height="*" />
@@ -161,6 +161,13 @@
                         </ui:AppBarButton.Icon>
                     </ui:AppBarButton>
                 </ui:CommandBar.PrimaryCommands>
+                <ui:CommandBar.SecondaryCommands>
+                    <ui:AppBarButton Label="恢复清屏" Name="RecoveryButton" Click="RecoveryButton_Click" IsEnabled="False">
+                        <ui:AppBarButton.Icon>
+                            <ui:FontIcon Icon="{x:Static ui:FluentSystemIcons.Folder_24_Regular}"/>
+                        </ui:AppBarButton.Icon>
+                    </ui:AppBarButton>
+                </ui:CommandBar.SecondaryCommands>
             </ui:CommandBar>
         </Border>
         <Border VerticalAlignment="Bottom" HorizontalAlignment="Right" Background="White" CornerRadius="12" Margin="12">
@@ -177,6 +184,6 @@
                 </ui:CommandBar>
             </ikw:SimpleStackPanel>
         </Border>
-        <TextBlock HorizontalAlignment="Center" VerticalAlignment="Bottom" Text="Version 1.0" Foreground="Gray" FontSize="6" Margin="2"/>
+        <TextBlock HorizontalAlignment="Center" VerticalAlignment="Bottom" Text="Version 1.1" Foreground="Gray" FontSize="6" Margin="2"/>
     </Grid>
 </Window>

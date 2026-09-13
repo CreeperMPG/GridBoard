@@ -38,6 +38,7 @@ namespace GridBoard
         private const int MaxHistory = 50;
         private readonly Dictionary<SelectedOptionType, (AppBarButton button, FontIcon icon, FontIconData regular, FontIconData filled, InkCanvasEditingMode editingMode)> _buttonConfigs;
         private static readonly Brush HighlightBrush = Brushes.DeepSkyBlue;
+        private int InkWeightBase = 3;
         private SelectedOptionType _selectedOption;
         public SelectedOptionType SelectedOption
         {
@@ -97,7 +98,49 @@ namespace GridBoard
             AppCanvas.DefaultDrawingAttributes.Width = AppCanvas.DefaultDrawingAttributes.Height = 3;
             LoadInk();
             InitializeTimer();
+            Touch.FrameReported += Touch_FrameReported;
         }
+
+        private bool _isTouching = false;
+        private Point _lastTouchPoint;
+        private Point? _lastPoint = null;
+        private void Touch_FrameReported(object sender, TouchFrameEventArgs e)
+        {
+            // 获取相对于 AppCanvas 的触摸点集合
+            var touchPoints = e.GetTouchPoints(AppCanvas);
+
+            if (touchPoints.Count > 0)
+            {
+                // InkCanvas 只支持单点，取第一个即可
+                var tp = touchPoints[0];
+
+                if (tp.Action == TouchAction.Up)
+                {
+                    _isTouching = false;
+                }
+                else
+                {
+                    _isTouching = true;
+                    _lastTouchPoint = tp.Position; // 已经相对于 AppCanvas
+                }
+            }
+            else
+            {
+                _isTouching = false;
+            }
+        }
+        public Point GetPointerPosition()
+        {
+            if (_isTouching)
+            {
+                return _lastTouchPoint;
+            }
+            else
+            {
+                return Mouse.GetPosition(AppCanvas);
+            }
+        }
+
         private DispatcherTimer _saveTimer;
         private void InitializeTimer()
         {
@@ -140,22 +183,22 @@ namespace GridBoard
         }
         private void SaveStrokeHistory()
         {
-            int a = 0;
-            if (a == 0) return; // 暂时禁用此功能
-            var clone = AppCanvas.Strokes.Clone();
-            _history.Push(clone);
+            //var clone = AppCanvas.Strokes.Clone();
+            //_history.Push(clone);
 
-            if (_history.Count > MaxHistory)
-                _history = new Stack<StrokeCollection>(_history.Take(MaxHistory));
+            //if (_history.Count > MaxHistory)
+            //    _history = new Stack<StrokeCollection>(_history.Take(MaxHistory));
         }
 
         private void AppCanvas_StrokeCollected(object sender, InkCanvasStrokeCollectedEventArgs e)
         {
             SaveStrokeHistory();
+            RecoveryButton.IsEnabled = AppCanvas.Strokes.Count == 0;
         }
         private void AppCanvas_StrokeErased(object sender, RoutedEventArgs e)
         {
             SaveStrokeHistory();
+            RecoveryButton.IsEnabled = AppCanvas.Strokes.Count == 0;
         }
         private void Undo()
         {
@@ -210,7 +253,9 @@ namespace GridBoard
 
             if (offsetX > clearThreshold)
             {
+                SaveInk();
                 AppCanvas.Strokes.Clear();
+                RecoveryButton.IsEnabled = true;
                 SaveStrokeHistory();
                 EraserFlyout.Hide();
             }
@@ -290,14 +335,23 @@ namespace GridBoard
                 switch (elem.Tag)
                 {
                     case "1":
-                        AppCanvas.DefaultDrawingAttributes.Width = AppCanvas.DefaultDrawingAttributes.Height = 3;
+                        AppCanvas.DefaultDrawingAttributes.Height = AppCanvas.DefaultDrawingAttributes.Width = 3;
                         break;
                     case "2":
-                        AppCanvas.DefaultDrawingAttributes.Width = AppCanvas.DefaultDrawingAttributes.Height = 6;
+                        AppCanvas.DefaultDrawingAttributes.Height = AppCanvas.DefaultDrawingAttributes.Width = 6;
                         break;
                     case "3":
-                        AppCanvas.DefaultDrawingAttributes.Width = AppCanvas.DefaultDrawingAttributes.Height = 9;
+                        AppCanvas.DefaultDrawingAttributes.Height = AppCanvas.DefaultDrawingAttributes.Width = 9;
                         break;
+                    //case "1":
+                    //    InkWeightBase = 3;
+                    //    break;
+                    //case "2":
+                    //    InkWeightBase = 6;
+                    //    break;
+                    //case "3":
+                    //    InkWeightBase = 9;
+                    //    break;
                 }
             }
         }
@@ -347,6 +401,27 @@ namespace GridBoard
                 return false;
             }
         }
+        //public void LoadInk()
+        //{
+        //    try
+        //    {
+        //        string filePath = GetStoragePath();
+        //        if (!File.Exists(filePath))
+        //        {
+        //            return;
+        //        }
+
+        //        using (FileStream fs = new FileStream(filePath, FileMode.Open))
+        //        {
+        //            // 从文件流创建 StrokeCollection 并赋值给 InkCanvas
+        //            AppCanvas.Strokes = new StrokeCollection(fs);
+        //        }
+        //        LastSaved.Text = "已加载笔迹";
+        //    }
+        //    catch
+        //    {
+        //    }
+        //}
         public void LoadInk()
         {
             try
@@ -354,24 +429,57 @@ namespace GridBoard
                 string filePath = GetStoragePath();
                 if (!File.Exists(filePath))
                 {
+                    LastSaved.Text = "文件不存在";
                     return;
                 }
 
-                using (FileStream fs = new FileStream(filePath, FileMode.Open))
+                // 看看文件大小，极端情况为 0 说明保存就是空的
+                var fi = new FileInfo(filePath);
+                System.Diagnostics.Debug.WriteLine($"[LoadInk] 文件大小 = {fi.Length} 字节");
+
+                StrokeCollection loaded;
+                using (FileStream fs = new FileStream(filePath, FileMode.Open, FileAccess.Read))
                 {
-                    // 从文件流创建 StrokeCollection 并赋值给 InkCanvas
-                    AppCanvas.Strokes = new StrokeCollection(fs);
+                    loaded = new StrokeCollection(fs);
                 }
-                LastSaved.Text = "已加载笔迹";
+
+                System.Diagnostics.Debug.WriteLine($"[LoadInk] 反序列化得到 {loaded.Count} 条笔画");
+                foreach (var s in loaded)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[LoadInk]  Stroke: 点数={s.StylusPoints.Count}, " +
+                        $"Width={s.DrawingAttributes.Width}, " +
+                        $"Color={s.DrawingAttributes.Color}");
+                }
+
+                var converted = new StrokeCollection();
+                foreach (Stroke s in loaded)
+                {
+                    if (s is VariableWidthStroke)
+                    {
+                        converted.Add(s);
+                    }
+                    else
+                    {
+                        converted.Add(new VariableWidthStroke(s.StylusPoints, s.DrawingAttributes));
+                    }
+                }
+
+                System.Diagnostics.Debug.WriteLine($"[LoadInk] 转换后 {converted.Count} 条笔画");
+
+                AppCanvas.Strokes = converted;
+
+                LastSaved.Text = $"已加载 {converted.Count} 条笔迹";
             }
-            catch
+            catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"[LoadInk] 异常: {ex}");
+                LastSaved.Text = "加载失败：" + ex.Message;
             }
         }
         private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
         {
             SaveInk();
-            GlobalAtomGuard.Release();
         }
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
@@ -382,6 +490,11 @@ namespace GridBoard
             Width = SystemParameters.PrimaryScreenWidth;
             Height = SystemParameters.PrimaryScreenHeight;
             Topmost = false;
+        }
+
+        private void RecoveryButton_Click(object sender, RoutedEventArgs e)
+        {
+            LoadInk();
         }
     }
 }

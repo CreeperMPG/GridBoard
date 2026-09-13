@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Configuration;
 using System.Data;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -24,28 +25,60 @@ namespace GridBoard
 
         [DllImport("user32.dll")]
         private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+        private static FileStream _lockStream;
 
         private const int SW_RESTORE = 9;
         private const int SW_SHOW = 5;
-
-        protected override void OnStartup(StartupEventArgs e)
+        [STAThread] // WPF 必须的 STA 线程
+        public static void Main()
         {
-            bool isFirstInstance = GlobalAtomGuard.TryAcquire();
-            if (isFirstInstance)
-            {
-                // 第一个实例，正常启动
-                base.OnStartup(e);
-                MainWindow = new MainWindow();
-                MainWindow.Show();
-            }
-            else
+            // 1. 单实例检测，必须在最前面
+            if (!TryAcquireSingleInstanceLock())
             {
                 ActivateMainWindow();
-                Shutdown();
+                return; // 直接退出，不进入 WPF 消息循环
+            }
+
+            // 2. 创建并运行 WPF 应用
+            var app = new App();
+            app.InitializeComponent(); // 加载 App.xaml 资源、StartupUri
+            app.Run();
+        }
+
+        private static bool TryAcquireSingleInstanceLock()
+        {
+            string lockPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "GridBoard",
+                "single_instance.lock");
+
+            Directory.CreateDirectory(Path.GetDirectoryName(lockPath));
+
+            try
+            {
+                _lockStream = new FileStream(
+                    lockPath,
+                    FileMode.OpenOrCreate,
+                    FileAccess.ReadWrite,
+                    FileShare.None); // 独占打开，原子操作
+                return true;
+            }
+            catch (IOException)
+            {
+                return false;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return false;
             }
         }
 
-        private void ActivateMainWindow()
+        public App()
+        {
+            Exit += (s, e) => _lockStream?.Dispose();
+        }
+
+        private static void ActivateMainWindow()
         {
             string windowTitle = "GridBoard"; 
             IntPtr hWnd = FindWindow(null, windowTitle);
@@ -54,17 +87,6 @@ namespace GridBoard
                 ShowWindow(hWnd, SW_RESTORE);
                 SetForegroundWindow(hWnd);
             }
-            else
-            {
-                Debug.WriteLine("Main window not found.");
-                GlobalAtomGuard.Clean();
-                Process.Start(Process.GetCurrentProcess().MainModule.FileName);
-            }
-        }
-
-        private void Application_Exit(object sender, ExitEventArgs e)
-        {
-            GlobalAtomGuard.Release();
         }
     }
 }
