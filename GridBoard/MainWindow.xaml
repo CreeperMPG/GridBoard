@@ -1,4 +1,4 @@
-﻿<Window x:Class="GridBoard.MainWindow"
+<Window x:Class="GridBoard.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -11,45 +11,95 @@
         WindowStyle="None" 
         ResizeMode="NoResize"
         Loaded="Window_Loaded"
-        Title="GridBoard" Height="450" Width="800" Closing="Window_Closing" Background="Black">
-    <Grid>
-        <local:VariableWidthInkCanvas x:Name="AppCanvas" Background="Black" StrokeCollected="AppCanvas_StrokeCollected" StrokeErased="AppCanvas_StrokeErased"/>
-        <Grid IsHitTestVisible="False">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="*" />
-                <RowDefinition Height="2" />
-                <RowDefinition Height="*" />
-                <RowDefinition Height="2" />
-                <RowDefinition Height="*" />
-                <RowDefinition Height="16" /><!---底部像素预留-->
-            </Grid.RowDefinitions>
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="2" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="2" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
+        Title="GridBoard" Height="450" Width="800" Closing="Window_Closing" Background="#2f2f2f">
+    <Window.Resources>
+        <local:MultiplyConverter x:Key="Mul2" Factor="2"/>
 
-            <!-- 水平线 1 -->
-            <Rectangle Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="5"
-                   Fill="White" IsHitTestVisible="False" />
-            <!-- 水平线 2 -->
-            <Rectangle Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="5"
-                   Fill="White" IsHitTestVisible="False" />
-            <!-- 垂直线 1 -->
-            <Rectangle Grid.Row="0" Grid.Column="1" Grid.RowSpan="5"
-                   Fill="White" IsHitTestVisible="False" />
-            <!-- 垂直线 2 -->
-            <Rectangle Grid.Row="0" Grid.Column="3" Grid.RowSpan="5"
-                   Fill="White" IsHitTestVisible="False" />
+        <!-- 九宫格选择器：去掉选中项默认的强调背景，
+             让「选中」完全由 MagnifyCellStyle 的 DataTrigger 表达 -->
+        <Style x:Key="MagnifyCellSelectorStyle" TargetType="ui:GridViewItem">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="Transparent"/>
+                </Trigger>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="Transparent"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- 九宫格格子样式定义在 GridView.Resources 里（MagnifyCellStyle） -->
+    </Window.Resources>
+    <Grid Name="MW">
+
+        <Grid Name="CanvasGroup"
+          HorizontalAlignment="Stretch"
+          VerticalAlignment="Stretch">
+
+            <!-- 会向下滑动的内容（InkCanvas + 网格线） -->
+            <Grid x:Name="SlidingContent">
+                <Grid.RenderTransform>
+                    <TransformGroup>
+                        <!-- 局部放大用（ScaleTransform 在前、TranslateTransform 在后） -->
+                        <ScaleTransform x:Name="ZoomScale" ScaleX="1" ScaleY="1"/>
+                        <TranslateTransform x:Name="SlideTransform" Y="0"/>
+                    </TransformGroup>
+                </Grid.RenderTransform>
+
+                <InkCanvas x:Name="AppCanvas"
+                       Background="Black"
+                       StrokeCollected="AppCanvas_StrokeCollected"
+                       StrokeErased="AppCanvas_StrokeErased"/>
+
+                <Grid IsHitTestVisible="False">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="2" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="2" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="16" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="2" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="2" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Rectangle Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="5" Fill="White"/>
+                    <Rectangle Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="5" Fill="White"/>
+                    <Rectangle Grid.Row="0" Grid.Column="1" Grid.RowSpan="6" Fill="White"/>
+                    <Rectangle Grid.Row="0" Grid.Column="3" Grid.RowSpan="6" Fill="White"/>
+                </Grid>
+            </Grid>
+
+            <Border x:Name="GrayPanel"
+                Background="#2f2f2f"
+                VerticalAlignment="Top"
+                local:DoubleTapBehavior.IsEnabled="True"
+                Height="0">
+                <TextBlock Text="点击下方“恢复屏幕”按钮或双击灰色区域以恢复屏幕。" Foreground="LightGray"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Bottom"
+                           FontSize="16"
+                       Margin="12"/>
+            </Border>
         </Grid>
-        <Border VerticalAlignment="Bottom" HorizontalAlignment="Center" Background="White" CornerRadius="12" Margin="12">
-            <ui:CommandBar DefaultLabelPosition="Bottom" PreviewMouseUp="CommandBar_PreviewMouseUp" PreviewTouchUp="CommandBar_PreviewTouchUp">
+        <Border VerticalAlignment="Bottom" HorizontalAlignment="Center" CornerRadius="16" Margin="12">
+            <Border.Background>
+                <SolidColorBrush Color="White" Opacity="0.8"/>
+            </Border.Background>
+            <ui:CommandBar DefaultLabelPosition="Bottom" PreviewMouseUp="CommandBar_PreviewMouseUp" PreviewTouchUp="CommandBar_PreviewTouchUp" CornerRadius="16">
                 <ui:CommandBar.PrimaryCommands>
                     <ui:AppBarButton Label="无" Name="NoneButton" Click="NoneButton_Click">
                         <ui:AppBarButton.Icon>
-                            <ui:FontIcon Name="NoneButtonIcon" Icon="{x:Static ui:FluentSystemIcons.ProjectionScreenText_24_Filled}"/>
+                            <ui:FontIcon Name="NoneButtonIcon" Icon="{x:Static ui:FluentSystemIcons.Cursor_24_Filled}"/>
                         </ui:AppBarButton.Icon>
                     </ui:AppBarButton>
                     <ui:AppBarButton Label="笔" Name="PenButton" Click="PenButton_Click">
@@ -105,7 +155,7 @@
                                             <Rectangle Fill="Violet"/>
                                             <Rectangle Fill="Gray"/>
                                             <Rectangle Fill="SkyBlue"/>
-                                            <Rectangle Fill="Azure"/>
+                                            <Rectangle Fill="LightGreen"/>
                                             <Rectangle Fill="Chocolate"/>
                                         </ui:GridView.Items>
                                     </ui:GridView>
@@ -138,17 +188,71 @@
                             </ui:Flyout>
                         </ui:FlyoutService.Flyout>
                     </ui:AppBarButton>
-                    <!--
-                    <ui:AppBarButton Label="撤销" Name="UndoButton" Click="UndoButton_Click">
+                    <ui:AppBarSeparator/>
+                    <ui:AppBarButton Label="下降屏幕" Name="HalfScreenButton" Click="HalfScreenButton_Click" FlyoutOpeningMode="None">
                         <ui:AppBarButton.Icon>
-                            <ui:FontIcon Icon="{x:Static ui:FluentSystemIcons.ArrowUndo_24_Regular}"/>
+                            <ui:FontIcon Name="HalfScreenButtonIcon" Icon="{x:Static ui:FluentSystemIcons.ArrowDown_24_Regular}"/>
                         </ui:AppBarButton.Icon>
-                    </ui:AppBarButton>-->
+                    </ui:AppBarButton>
+                    <ui:AppBarButton Label="局部放大" Name="MagnifyButton" Click="MagnifyButton_Click" FlyoutOpeningMode="Click">
+                        <ui:AppBarButton.Icon>
+                            <ui:FontIcon Name="MagnifyButtonIcon" Icon="{x:Static ui:FluentSystemIcons.ZoomIn_24_Regular}"/>
+                        </ui:AppBarButton.Icon>
+                        <ui:FlyoutService.Flyout>
+                            <ui:Flyout x:Name="MagnifyFlyout" Placement="Top">
+                                <StackPanel>
+                                    <TextBlock Text="选择要放大的区域" Margin="0,0,0,8"/>
+                                    <!-- 只做「选中 = 主题色」，不做悬停效果（触屏为主） -->
+                                    <ui:GridView Name="MagnifyRegionSelector"
+                                                 SelectedIndex="0"
+                                                 IsItemClickEnabled="True"
+                                                 ItemClick="MagnifyRegionSelector_ItemClick"
+                                                 ItemContainerStyle="{StaticResource MagnifyCellSelectorStyle}">
+                                        <ui:GridView.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <UniformGrid Columns="3"/>
+                                            </ItemsPanelTemplate>
+                                        </ui:GridView.ItemsPanel>
+                                        <ui:GridView.Resources>
+                                            <Style x:Key="MagnifyCellStyle" TargetType="Border">
+                                                <Setter Property="Width" Value="44"/>
+                                                <Setter Property="Height" Value="44"/>
+                                                <Setter Property="Margin" Value="2"/>
+                                                <Setter Property="CornerRadius" Value="4"/>
+                                                <Setter Property="BorderThickness" Value="1"/>
+                                                <Setter Property="BorderBrush" Value="#FF9A9A9A"/>
+                                                <Setter Property="Background" Value="#FFEDEDED"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Path=IsSelected, RelativeSource={RelativeSource AncestorType=ui:GridViewItem}}"
+                                                                 Value="True">
+                                                        <Setter Property="Background" Value="{DynamicResource SystemAccentColor}"/>
+                                                        <Setter Property="BorderBrush" Value="{DynamicResource SystemAccentColor}"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </ui:GridView.Resources>
+                                        <Border Style="{StaticResource MagnifyCellStyle}" Tag="0"/>
+                                        <Border Style="{StaticResource MagnifyCellStyle}" Tag="1"/>
+                                        <Border Style="{StaticResource MagnifyCellStyle}" Tag="2"/>
+                                        <Border Style="{StaticResource MagnifyCellStyle}" Tag="3"/>
+                                        <Border Style="{StaticResource MagnifyCellStyle}" Tag="4"/>
+                                        <Border Style="{StaticResource MagnifyCellStyle}" Tag="5"/>
+                                        <Border Style="{StaticResource MagnifyCellStyle}" Tag="6"/>
+                                        <Border Style="{StaticResource MagnifyCellStyle}" Tag="7"/>
+                                        <Border Style="{StaticResource MagnifyCellStyle}" Tag="8"/>
+                                    </ui:GridView>
+                                </StackPanel>
+                            </ui:Flyout>
+                        </ui:FlyoutService.Flyout>
+                    </ui:AppBarButton>
                 </ui:CommandBar.PrimaryCommands>
             </ui:CommandBar>
         </Border>
-        <Border VerticalAlignment="Bottom" HorizontalAlignment="Left" Background="White" CornerRadius="12" Margin="12">
-            <ui:CommandBar DefaultLabelPosition="Bottom">
+        <Border VerticalAlignment="Bottom" HorizontalAlignment="Left" CornerRadius="16" Margin="12">
+            <Border.Background>
+                <SolidColorBrush Color="White" Opacity="0.8"/>
+            </Border.Background>
+            <ui:CommandBar DefaultLabelPosition="Bottom" CornerRadius="16">
                 <ui:CommandBar.PrimaryCommands>
                     <ui:AppBarButton Label="关闭" Name="CloseButton" Click="CloseButton_Click">
                         <ui:AppBarButton.Icon>
@@ -170,9 +274,12 @@
                 </ui:CommandBar.SecondaryCommands>
             </ui:CommandBar>
         </Border>
-        <Border VerticalAlignment="Bottom" HorizontalAlignment="Right" Background="White" CornerRadius="12" Margin="12">
+        <Border VerticalAlignment="Bottom" HorizontalAlignment="Right" CornerRadius="16" Margin="12">
+            <Border.Background>
+                <SolidColorBrush Color="White" Opacity="0.8"/>
+            </Border.Background>
             <ikw:SimpleStackPanel Orientation="Horizontal">
-                <TextBlock Text="保存状态显示" VerticalAlignment="Center" Margin="16,0,0,0" Foreground="Gray" Name="LastSaved"/>
+                <TextBlock VerticalAlignment="Center" Margin="20,0,0,0" Foreground="Gray" Name="LastSaved"/>
                 <ui:CommandBar DefaultLabelPosition="Bottom">
                     <ui:CommandBar.PrimaryCommands>
                         <ui:AppBarButton Label="保存" Name="SaveButton" Click="SaveButton_Click">
@@ -184,6 +291,6 @@
                 </ui:CommandBar>
             </ikw:SimpleStackPanel>
         </Border>
-        <TextBlock HorizontalAlignment="Center" VerticalAlignment="Bottom" Text="Version 1.1" Foreground="Gray" FontSize="6" Margin="2"/>
+        <TextBlock HorizontalAlignment="Center" FontFamily="Segoe UI Variable Static Display,Segoe UI" VerticalAlignment="Bottom" Text="Version 1.2 | (c) Copyright CreeperMPG [292312] 2026-2026 | GitHub:CreeperMPG/GridBoard" Foreground="Gray" FontSize="5.5" Margin="2.5"/>
     </Grid>
 </Window>

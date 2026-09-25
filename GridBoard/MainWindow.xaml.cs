@@ -1,4 +1,4 @@
-﻿using iNKORE.UI.WPF.Modern;
+using iNKORE.UI.WPF.Modern;
 using iNKORE.UI.WPF.Modern.Common.IconKeys;
 using iNKORE.UI.WPF.Modern.Controls;
 using System;
@@ -15,6 +15,7 @@ using System.Windows.Documents;
 using System.Windows.Ink;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Threading;
@@ -38,7 +39,6 @@ namespace GridBoard
         private const int MaxHistory = 50;
         private readonly Dictionary<SelectedOptionType, (AppBarButton button, FontIcon icon, FontIconData regular, FontIconData filled, InkCanvasEditingMode editingMode)> _buttonConfigs;
         private static readonly Brush HighlightBrush = Brushes.DeepSkyBlue;
-        private int InkWeightBase = 3;
         private SelectedOptionType _selectedOption;
         public SelectedOptionType SelectedOption
         {
@@ -89,56 +89,15 @@ namespace GridBoard
             SaveStrokeHistory();
             _buttonConfigs = new Dictionary<SelectedOptionType, (AppBarButton button, FontIcon icon, FontIconData regular, FontIconData filled, InkCanvasEditingMode editingMode)>
             {
-                [SelectedOptionType.None] = (NoneButton, NoneButtonIcon, FluentSystemIcons.ProjectionScreenText_24_Regular, FluentSystemIcons.ProjectionScreenText_24_Filled, InkCanvasEditingMode.None),
+                [SelectedOptionType.None] = (NoneButton, NoneButtonIcon, FluentSystemIcons.Cursor_24_Regular, FluentSystemIcons.Cursor_24_Filled, InkCanvasEditingMode.None),
                 [SelectedOptionType.Pen] = (PenButton, PenButtonIcon, FluentSystemIcons.Pen_24_Regular, FluentSystemIcons.Pen_24_Filled, InkCanvasEditingMode.Ink),
                 [SelectedOptionType.Eraser] = (EraserButton, EraserButtonIcon, FluentSystemIcons.Eraser_24_Regular, FluentSystemIcons.Eraser_24_Filled, InkCanvasEditingMode.EraseByPoint)
             };
             SelectedOption = SelectedOptionType.None;
             AppCanvas.DefaultDrawingAttributes.IgnorePressure = true;
-            AppCanvas.DefaultDrawingAttributes.Width = AppCanvas.DefaultDrawingAttributes.Height = 3;
+            AppCanvas.DefaultDrawingAttributes.Width = AppCanvas.DefaultDrawingAttributes.Height = 2;
             LoadInk();
             InitializeTimer();
-            Touch.FrameReported += Touch_FrameReported;
-        }
-
-        private bool _isTouching = false;
-        private Point _lastTouchPoint;
-        private Point? _lastPoint = null;
-        private void Touch_FrameReported(object sender, TouchFrameEventArgs e)
-        {
-            // 获取相对于 AppCanvas 的触摸点集合
-            var touchPoints = e.GetTouchPoints(AppCanvas);
-
-            if (touchPoints.Count > 0)
-            {
-                // InkCanvas 只支持单点，取第一个即可
-                var tp = touchPoints[0];
-
-                if (tp.Action == TouchAction.Up)
-                {
-                    _isTouching = false;
-                }
-                else
-                {
-                    _isTouching = true;
-                    _lastTouchPoint = tp.Position; // 已经相对于 AppCanvas
-                }
-            }
-            else
-            {
-                _isTouching = false;
-            }
-        }
-        public Point GetPointerPosition()
-        {
-            if (_isTouching)
-            {
-                return _lastTouchPoint;
-            }
-            else
-            {
-                return Mouse.GetPosition(AppCanvas);
-            }
         }
 
         private DispatcherTimer _saveTimer;
@@ -335,23 +294,23 @@ namespace GridBoard
                 switch (elem.Tag)
                 {
                     case "1":
-                        AppCanvas.DefaultDrawingAttributes.Height = AppCanvas.DefaultDrawingAttributes.Width = 3;
+                        AppCanvas.DefaultDrawingAttributes.Height = AppCanvas.DefaultDrawingAttributes.Width = 2;
                         break;
                     case "2":
-                        AppCanvas.DefaultDrawingAttributes.Height = AppCanvas.DefaultDrawingAttributes.Width = 6;
+                        AppCanvas.DefaultDrawingAttributes.Height = AppCanvas.DefaultDrawingAttributes.Width = 4;
                         break;
                     case "3":
-                        AppCanvas.DefaultDrawingAttributes.Height = AppCanvas.DefaultDrawingAttributes.Width = 9;
+                        AppCanvas.DefaultDrawingAttributes.Height = AppCanvas.DefaultDrawingAttributes.Width = 8;
                         break;
-                    //case "1":
-                    //    InkWeightBase = 3;
-                    //    break;
-                    //case "2":
-                    //    InkWeightBase = 6;
-                    //    break;
-                    //case "3":
-                    //    InkWeightBase = 9;
-                    //    break;
+                        //case "1":
+                        //    InkWeightBase = 3;
+                        //    break;
+                        //case "2":
+                        //    InkWeightBase = 6;
+                        //    break;
+                        //case "3":
+                        //    InkWeightBase = 9;
+                        //    break;
                 }
             }
         }
@@ -365,6 +324,10 @@ namespace GridBoard
         {
             WindowState = WindowState.Minimized;
             SaveInk();
+            if (_isDown)
+            {
+                ToggleTransform();
+            }
         }
 
         private void SaveButton_Click(object sender, RoutedEventArgs e)
@@ -401,27 +364,6 @@ namespace GridBoard
                 return false;
             }
         }
-        //public void LoadInk()
-        //{
-        //    try
-        //    {
-        //        string filePath = GetStoragePath();
-        //        if (!File.Exists(filePath))
-        //        {
-        //            return;
-        //        }
-
-        //        using (FileStream fs = new FileStream(filePath, FileMode.Open))
-        //        {
-        //            // 从文件流创建 StrokeCollection 并赋值给 InkCanvas
-        //            AppCanvas.Strokes = new StrokeCollection(fs);
-        //        }
-        //        LastSaved.Text = "已加载笔迹";
-        //    }
-        //    catch
-        //    {
-        //    }
-        //}
         public void LoadInk()
         {
             try
@@ -429,52 +371,18 @@ namespace GridBoard
                 string filePath = GetStoragePath();
                 if (!File.Exists(filePath))
                 {
-                    LastSaved.Text = "文件不存在";
                     return;
                 }
 
-                // 看看文件大小，极端情况为 0 说明保存就是空的
-                var fi = new FileInfo(filePath);
-                System.Diagnostics.Debug.WriteLine($"[LoadInk] 文件大小 = {fi.Length} 字节");
-
-                StrokeCollection loaded;
-                using (FileStream fs = new FileStream(filePath, FileMode.Open, FileAccess.Read))
+                using (FileStream fs = new FileStream(filePath, FileMode.Open))
                 {
-                    loaded = new StrokeCollection(fs);
+                    // 从文件流创建 StrokeCollection 并赋值给 InkCanvas
+                    AppCanvas.Strokes = new StrokeCollection(fs);
                 }
-
-                System.Diagnostics.Debug.WriteLine($"[LoadInk] 反序列化得到 {loaded.Count} 条笔画");
-                foreach (var s in loaded)
-                {
-                    System.Diagnostics.Debug.WriteLine(
-                        $"[LoadInk]  Stroke: 点数={s.StylusPoints.Count}, " +
-                        $"Width={s.DrawingAttributes.Width}, " +
-                        $"Color={s.DrawingAttributes.Color}");
-                }
-
-                var converted = new StrokeCollection();
-                foreach (Stroke s in loaded)
-                {
-                    if (s is VariableWidthStroke)
-                    {
-                        converted.Add(s);
-                    }
-                    else
-                    {
-                        converted.Add(new VariableWidthStroke(s.StylusPoints, s.DrawingAttributes));
-                    }
-                }
-
-                System.Diagnostics.Debug.WriteLine($"[LoadInk] 转换后 {converted.Count} 条笔画");
-
-                AppCanvas.Strokes = converted;
-
-                LastSaved.Text = $"已加载 {converted.Count} 条笔迹";
+                LastSaved.Text = $"已加载 {AppCanvas.Strokes.Count} 条笔迹";
             }
-            catch (Exception ex)
+            catch
             {
-                System.Diagnostics.Debug.WriteLine($"[LoadInk] 异常: {ex}");
-                LastSaved.Text = "加载失败：" + ex.Message;
             }
         }
         private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
@@ -484,6 +392,9 @@ namespace GridBoard
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
+            // 双击灰色区域恢复屏幕
+            DoubleTapBehavior.AddDoubleTapHandler(GrayPanel, Border_DoubleTap);
+
             Topmost = true;
             Left = 0;
             Top = 0;
@@ -495,6 +406,188 @@ namespace GridBoard
         private void RecoveryButton_Click(object sender, RoutedEventArgs e)
         {
             LoadInk();
+        }
+        // ==================== 视图状态（下降屏幕 / 局部放大，互斥） ====================
+        //
+        // 「下降屏幕」和「局部放大」共用同一组变换（GrayPanel.Height + Scale + Translate），
+        // 两者互斥：同一时刻只有一个激活，切换时一趟动画从当前位置直接走到新目标
+        // （不先复位再播放，WPF 的 BeginAnimation 天然从当前渲染值补间）。
+        //
+        // 状态标志只由下面两个 Apply 方法维护，按钮处理器不直接碰它们 ——
+        // 否则标志位和实际动画会脱节。
+
+        private const double AnimMs = 555;
+
+        private bool _isDown;
+        private bool _isMagnified;
+        private int _magnifyRegion = 4;   // 默认正中格
+
+        private static PowerEase ViewEase()
+        {
+            return new PowerEase { EasingMode = EasingMode.EaseOut, Power = 6 };
+        }
+
+        private static DoubleAnimation Anim(double to)
+        {
+            return new DoubleAnimation
+            {
+                To = to,
+                Duration = TimeSpan.FromMilliseconds(AnimMs),
+                EasingFunction = ViewEase()
+            };
+        }
+
+        /// <summary>
+        /// 唯一写变换的地方：按当前状态算出最终形态，一趟动画写进去。
+        /// </summary>
+        private void ApplyViewState()
+        {
+            // 按钮文字/图标先更新 —— 它与布局无关，
+            // 不能因为尺寸还没就绪（窗口尚未布局完）就跟动画一起被跳过。
+            RefreshViewButtons();
+
+            double w = ActualWidth;
+            double h = MW.ActualHeight;
+            if (w <= 0 || h <= 0)
+                return;   // 尺寸还没就绪，这次不动画（等下一次调用）
+
+            // ---- 默认：什么都没开 ----
+            double grayHeight = 0;
+            double scale = 1;
+            double tx = 0;
+            double ty = 0;
+
+            if (_isDown)
+            {
+                // 下降屏幕：内容下移半屏，灰色区域占上半屏（双击它可恢复）
+                grayHeight = h * 0.5;
+                ty = h * 0.5;
+            }
+            else if (_isMagnified && _magnifyRegion >= 0 && _magnifyRegion < 9)
+            {
+                // 局部放大：等比放大到铺满，并把选中格的中心对准屏幕正中。
+                // 变换链是 TransformGroup[Scale → Translate]，实测矩阵 (s,0,0,s,tx,ty)，
+                // 平移量是最后叠加的屏幕像素，不会被缩放放大 → screen = p × s + t
+                double cx = CellCenters[_magnifyRegion % 3];
+                double cy = CellCenters[_magnifyRegion / 3];
+
+                // 等比放大，宽高比不变 —— 九等分的每格尺寸相同，倍数与选的是哪一格无关。
+                scale = ZoomScaleFactor;
+
+                tx = w * (0.5 - cx * scale);
+                ty = h * (0.5 - cy * scale) + 120 * (2 - _magnifyRegion / 3);
+
+                // 放大时灰条收回 —— 它本来就是用来取消下降屏幕的
+                grayHeight = 0;
+            }
+
+            GrayPanel.BeginAnimation(FrameworkElement.HeightProperty, Anim(grayHeight));
+            ZoomScale.BeginAnimation(ScaleTransform.ScaleXProperty, Anim(scale));
+            ZoomScale.BeginAnimation(ScaleTransform.ScaleYProperty, Anim(scale));
+            SlideTransform.BeginAnimation(TranslateTransform.XProperty, Anim(tx));
+            SlideTransform.BeginAnimation(TranslateTransform.YProperty, Anim(ty));
+        }
+
+        /// <summary>按钮的文字与图标跟着状态走，集中在同一处更新。</summary>
+        private void RefreshViewButtons()
+        {
+            HalfScreenButton.Label = _isDown ? "恢复屏幕" : "下降屏幕";
+            HalfScreenButtonIcon.Icon = _isDown
+                ? FluentSystemIcons.ArrowUp_24_Regular
+                : FluentSystemIcons.ArrowDown_24_Regular;
+
+            MagnifyButton.Label = _isMagnified ? "恢复屏幕" : "局部放大";
+            MagnifyButtonIcon.Icon = _isMagnified
+                ? FluentSystemIcons.ZoomOut_24_Regular
+                : FluentSystemIcons.ZoomIn_24_Regular;
+        }
+
+        /// <summary>下降屏幕的开关（互斥：开它就会关掉局部放大）。</summary>
+        private void ApplyDownScreen(bool down)
+        {
+            _isDown = down;
+            if (down)
+                _isMagnified = false;   // 互斥：顶掉放大
+
+            ApplyViewState();
+        }
+
+        private void ToggleTransform()
+        {
+            ApplyDownScreen(!_isDown);
+        }
+
+        private void HalfScreenButton_Click(object sender, RoutedEventArgs e)
+        {
+            ToggleTransform();
+        }
+
+        private void Border_DoubleTap(object sender, DoubleTapRoutedEventArgs e)
+        {
+            // 双击灰条 = 取消下降屏幕（灰条在放大状态下是收回的，所以这里只会关掉下降）
+            if (_isDown)
+                ApplyDownScreen(false);
+        }
+
+        // ==================== 局部放大 ====================
+
+        // 3×3 九等分的格子中心
+        private static readonly double[] CellCenters = { 1.0 / 4.2, 0.5, 3.2 / 4.2 };
+
+        // 局部放大的等比放大率。
+        // 0.9 × 铺满所需的 3 倍 = 2.700：画面约占屏幕 90%（每边留 10% 余量），
+        // 免得把网格线正好切在屏幕边缘上。
+        private const double ZoomScaleFactor = 1.5;
+
+        private void MagnifyButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_isMagnified)
+            {
+                MagnifyButton.FlyoutOpeningMode = FlyoutOpeningMode.None;
+                ApplyMagnify(-1);
+            }
+            else
+            {
+                MagnifyButton.FlyoutOpeningMode = FlyoutOpeningMode.Click;
+            }
+        }
+
+        private void MagnifyRegionSelector_ItemClick(object sender, ItemClickEventArgs e)
+        {
+            var border = e.ClickedItem as Border;
+            if (border == null)
+                return;
+
+            int index;
+            if (!int.TryParse(Convert.ToString(border.Tag), out index))
+                return;
+
+            _magnifyRegion = index;
+
+            // 先收 Flyout，再启动动画（顺序不能反）
+            MagnifyFlyout.Hide();
+
+            ApplyMagnify(index);
+        }
+
+        /// <summary>
+        /// 局部放大的应用层：region >= 0 表示放大该格并激活；region &lt; 0 表示关闭。
+        /// 互斥：开它就会关掉下降屏幕。动画统一由 <see cref="ApplyViewState"/> 下发。
+        /// </summary>
+        private void ApplyMagnify(int region)
+        {
+            if (region >= 0 && region < 9)
+            {
+                _magnifyRegion = region;
+                _isMagnified = true;
+                _isDown = false;          // 互斥：顶掉下降屏幕（灰条一并收回）
+            }
+            else
+            {
+                _isMagnified = false;
+            }
+
+            ApplyViewState();
         }
     }
 }
