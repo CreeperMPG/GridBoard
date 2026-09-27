@@ -9,6 +9,7 @@
         mc:Ignorable="d"
         WindowState="Normal" 
         WindowStyle="None" 
+        Closed="Window_Closed"
         ResizeMode="NoResize"
         Loaded="Window_Loaded"
         Title="GridBoard" Height="450" Width="800" Closing="Window_Closing" Background="#2f2f2f">
@@ -291,6 +292,6 @@
                 </ui:CommandBar>
             </ikw:SimpleStackPanel>
         </Border>
-        <TextBlock HorizontalAlignment="Center" FontFamily="Segoe UI Variable Static Display,Segoe UI" VerticalAlignment="Bottom" Text="Version 1.2 | (c) Copyright CreeperMPG [292312] 2026-2026 | GitHub:CreeperMPG/GridBoard" Foreground="Gray" FontSize="5.5" Margin="2.5"/>
+        <TextBlock HorizontalAlignment="Center" FontFamily="Segoe UI Variable Static Display,Segoe UI" VerticalAlignment="Bottom" Text="Version 1.2-patch1 | (c) Copyright CreeperMPG [292312] 2026-2026 | GitHub:CreeperMPG/GridBoard" Foreground="Gray" FontSize="5.5" Margin="2.5"/>
     </Grid>
 </Window>

@@ -25,7 +25,7 @@ namespace GridBoard
 
         [DllImport("user32.dll")]
         private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-        private static FileStream _lockStream;
+        public static FileStream _lockStream;
 
         private const int SW_RESTORE = 9;
         private const int SW_SHOW = 5;
@@ -75,7 +75,7 @@ namespace GridBoard
 
         public App()
         {
-            Exit += (s, e) => _lockStream?.Dispose();
+            //Exit += (s, e) => { MessageBox.Show("1"); _lockStream?.Dispose(); Environment.Exit(0); };
         }
 
         private static void ActivateMainWindow()

@@ -3,6 +3,7 @@ using iNKORE.UI.WPF.Modern.Common.IconKeys;
 using iNKORE.UI.WPF.Modern.Controls;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -387,7 +388,9 @@ namespace GridBoard
         }
         private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
         {
-            SaveInk();
+            //SaveInk();
+            //Trace.WriteLine("112");
+            //Application.Current.Shutdown();
         }
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
@@ -588,6 +591,12 @@ namespace GridBoard
             }
 
             ApplyViewState();
+        }
+
+        private void Window_Closed(object sender, EventArgs e)
+        {
+            App._lockStream?.Dispose();
+            Environment.Exit(0);
         }
     }
 }
