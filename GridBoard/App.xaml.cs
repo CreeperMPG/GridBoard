@@ -38,7 +38,6 @@ namespace GridBoard
                 ActivateMainWindow();
                 return; // 直接退出，不进入 WPF 消息循环
             }
-
             // 2. 创建并运行 WPF 应用
             var app = new App();
             app.InitializeComponent(); // 加载 App.xaml 资源、StartupUri

@@ -99,6 +99,7 @@ namespace GridBoard
             AppCanvas.DefaultDrawingAttributes.Width = AppCanvas.DefaultDrawingAttributes.Height = 2;
             LoadInk();
             InitializeTimer();
+            SetCopyrightTextState(false);
         }
 
         private DispatcherTimer _saveTimer;
@@ -443,7 +444,11 @@ namespace GridBoard
         /// <summary>
         /// 唯一写变换的地方：按当前状态算出最终形态，一趟动画写进去。
         /// </summary>
-        private void ApplyViewState()
+        /// <returns>
+        /// 这趟动画里代表性的那条（GrayPanel 高度，五条时长/缓动完全相同，
+        /// 等它一条就是等全部），供调用方等待动画结束；尺寸未就绪时返回 null。
+        /// </returns>
+        private DoubleAnimation ApplyViewState()
         {
             // 按钮文字/图标先更新 —— 它与布局无关，
             // 不能因为尺寸还没就绪（窗口尚未布局完）就跟动画一起被跳过。
@@ -452,7 +457,7 @@ namespace GridBoard
             double w = ActualWidth;
             double h = MW.ActualHeight;
             if (w <= 0 || h <= 0)
-                return;   // 尺寸还没就绪，这次不动画（等下一次调用）
+                return null;   // 尺寸还没就绪，这次不动画（等下一次调用）
 
             // ---- 默认：什么都没开 ----
             double grayHeight = 0;
@@ -484,11 +489,13 @@ namespace GridBoard
                 grayHeight = 0;
             }
 
-            GrayPanel.BeginAnimation(FrameworkElement.HeightProperty, Anim(grayHeight));
+            var grayAnim = Anim(grayHeight);
+            GrayPanel.BeginAnimation(FrameworkElement.HeightProperty, grayAnim);
             ZoomScale.BeginAnimation(ScaleTransform.ScaleXProperty, Anim(scale));
             ZoomScale.BeginAnimation(ScaleTransform.ScaleYProperty, Anim(scale));
             SlideTransform.BeginAnimation(TranslateTransform.XProperty, Anim(tx));
             SlideTransform.BeginAnimation(TranslateTransform.YProperty, Anim(ty));
+            return grayAnim;
         }
 
         /// <summary>按钮的文字与图标跟着状态走，集中在同一处更新。</summary>
@@ -505,14 +512,17 @@ namespace GridBoard
                 : FluentSystemIcons.ZoomIn_24_Regular;
         }
 
-        /// <summary>下降屏幕的开关（互斥：开它就会关掉局部放大）。</summary>
-        private void ApplyDownScreen(bool down)
+        /// <summary>
+        /// 下降屏幕的开关（互斥：开它就会关掉局部放大）。
+        /// </summary>
+        /// <returns>这趟动画的代表条，调用方需要等动画结束时用；否则忽略即可。</returns>
+        private DoubleAnimation ApplyDownScreen(bool down)
         {
             _isDown = down;
             if (down)
                 _isMagnified = false;   // 互斥：顶掉放大
 
-            ApplyViewState();
+            return ApplyViewState();
         }
 
         private void ToggleTransform()
@@ -577,7 +587,8 @@ namespace GridBoard
         /// 局部放大的应用层：region >= 0 表示放大该格并激活；region &lt; 0 表示关闭。
         /// 互斥：开它就会关掉下降屏幕。动画统一由 <see cref="ApplyViewState"/> 下发。
         /// </summary>
-        private void ApplyMagnify(int region)
+        /// <returns>这趟动画的代表条，调用方需要等动画结束时用；否则忽略即可。</returns>
+        private DoubleAnimation ApplyMagnify(int region)
         {
             if (region >= 0 && region < 9)
             {
@@ -590,7 +601,148 @@ namespace GridBoard
                 _isMagnified = false;
             }
 
-            ApplyViewState();
+            return ApplyViewState();
+        }
+        public static readonly string Version = "1.2.1";
+        private void SetCopyrightTextState(bool exporting)
+        {
+            if (exporting)
+            {
+                string dateStr = DateTime.Today.ToString("yyyyMMdd");
+                VersionText.Text = $"GridBoard {Version} | {dateStr}";
+                VersionText.FontSize = 16;
+                VersionText.Margin = new Thickness(8);
+            }
+            else
+            {
+                VersionText.Text = $"Version {Version} | (c) Copyright CreeperMPG [292312] 2026-2026 | GitHub:CreeperMPG/GridBoard";
+                VersionText.FontSize = 5.5;
+                VersionText.Margin = new Thickness(2.5);
+            }
+        }
+
+        // ==================== 导出为图片 ====================
+        //
+        // 流程：恢复正常视图（等 555ms 动画落地）→ 藏起底部浮层与版本号小字
+        //       → RenderTargetBitmap 截整个窗口 → SaveFileDialog 选路径写盘
+        //       → finally 把浮层放回来（取消/异常也保证放回）。
+        // 截完图视图就停在正常状态，不回退原来的「下降屏幕/局部放大」。
+
+        private bool _isExporting;   // 防重入：动画/对话框期间再点一次会乱
+
+        private async void SaveScreenshotButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_isExporting)
+                return;
+            _isExporting = true;
+            try
+            {
+                // 1. 恢复视图 —— 两者互斥，同一时刻只会命中一个
+                bool wasInSpecialView = _isDown || _isMagnified;
+                DoubleAnimation restoreAnim = null;
+                if (_isDown)
+                    restoreAnim = ApplyDownScreen(false);
+                else if (_isMagnified)
+                    restoreAnim = ApplyMagnify(-1);
+
+                // 2. 等这趟动画走完。挂 Completed 精确等；
+                //    兜底超时是防「动画被别处新开的一趟顶掉、Completed 永远不来」把导出卡死。
+                if (wasInSpecialView && restoreAnim != null)
+                {
+                    var finished = new TaskCompletionSource<object>();
+                    restoreAnim.Completed += (s, a) => finished.TrySetResult(null);
+                    await Task.WhenAny(finished.Task, Task.Delay((int)AnimMs + 100));
+                }
+                
+                // 3. 藏起浮层，补一帧渲染，免得截到收起前的残影
+                BottomToolbar.Visibility = Visibility.Collapsed;
+                BottomLeftBar.Visibility = Visibility.Collapsed;
+                BottomRightBar.Visibility = Visibility.Collapsed;
+                SetCopyrightTextState(true);
+                MW.UpdateLayout();
+                await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);
+
+                // 4. 截窗
+                RenderTargetBitmap bmp = CaptureWindow();
+
+                // 5. 选路径 + 写盘（取消则什么都不做，直接走 finally）
+                SaveScreenshot(bmp);
+            }
+            catch (Exception ex)
+            {
+                iNKORE.UI.WPF.Modern.Controls.MessageBox.Show(this, "导出图片失败：" + ex.Message, "GridBoard",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                BottomToolbar.Visibility = Visibility.Visible;
+                BottomLeftBar.Visibility = Visibility.Visible;
+                BottomRightBar.Visibility = Visibility.Visible;
+                SetCopyrightTextState(false);
+                _isExporting = false;
+            }
+        }
+
+        /// <summary>
+        /// 按屏幕物理分辨率截取整个窗口。
+        /// 像素尺寸与 DPI 必须配套：像素 = DIP × 缩放、dpi = 96 × 缩放 ——
+        /// 这样画布的 DIP 范围正好铺满位图，150% 缩放下也不会截出糊图。
+        /// </summary>
+        private RenderTargetBitmap CaptureWindow()
+        {
+            DpiScale dpi = VisualTreeHelper.GetDpi(this);
+            int pxW = (int)Math.Round(ActualWidth * dpi.DpiScaleX);
+            int pxH = (int)Math.Round(ActualHeight * dpi.DpiScaleY);
+
+            var bmp = new RenderTargetBitmap(pxW, pxH,
+                96 * dpi.DpiScaleX, 96 * dpi.DpiScaleY, PixelFormats.Pbgra32);
+            bmp.Render(this);
+            bmp.Freeze();
+            return bmp;
+        }
+
+        /// <summary>弹保存框并按所选格式写盘；用户取消时什么都不做。</summary>
+        private void SaveScreenshot(BitmapSource bmp)
+        {
+            var dlg = new Microsoft.Win32.SaveFileDialog
+            {
+                Title = "导出为图片",
+                Filter = "PNG 图片 (*.png)|*.png|JPEG 图片 (*.jpg)|*.jpg|BMP 图片 (*.bmp)|*.bmp",
+                AddExtension = false,   // 扩展名自己补：DefaultExt 是固定的，
+                                        // 用户选 JPG 不写扩展名时会被补成 .png（内容却是 JPEG）
+                FileName = "GridBoard_" + DateTime.Now.ToString("yyyyMMdd_HHmmss")
+            };
+
+            if (dlg.ShowDialog(this) != true)
+                return;
+
+            BitmapEncoder encoder;
+            string defaultExt;
+            switch (dlg.FilterIndex)
+            {
+                case 2:
+                    encoder = new JpegBitmapEncoder { QualityLevel = 95 };
+                    defaultExt = ".jpg";
+                    break;
+                case 3:
+                    encoder = new BmpBitmapEncoder();
+                    defaultExt = ".bmp";
+                    break;
+                default:
+                    encoder = new PngBitmapEncoder();
+                    defaultExt = ".png";
+                    break;
+            }
+
+            string path = dlg.FileName;
+            if (string.IsNullOrEmpty(Path.GetExtension(path)))
+                path += defaultExt;
+
+            encoder.Frames.Add(BitmapFrame.Create(bmp));
+            using (var fs = new FileStream(path, FileMode.Create, FileAccess.Write))
+            {
+                encoder.Save(fs);
+            }
         }
 
         private void Window_Closed(object sender, EventArgs e)

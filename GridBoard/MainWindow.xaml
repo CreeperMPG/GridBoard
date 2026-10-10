@@ -92,7 +92,7 @@
                        Margin="12"/>
             </Border>
         </Grid>
-        <Border VerticalAlignment="Bottom" HorizontalAlignment="Center" CornerRadius="16" Margin="12">
+        <Border x:Name="BottomToolbar" VerticalAlignment="Bottom" HorizontalAlignment="Center" CornerRadius="16" Margin="12">
             <Border.Background>
                 <SolidColorBrush Color="White" Opacity="0.8"/>
             </Border.Background>
@@ -249,7 +249,7 @@
                 </ui:CommandBar.PrimaryCommands>
             </ui:CommandBar>
         </Border>
-        <Border VerticalAlignment="Bottom" HorizontalAlignment="Left" CornerRadius="16" Margin="12">
+        <Border x:Name="BottomLeftBar" VerticalAlignment="Bottom" HorizontalAlignment="Left" CornerRadius="16" Margin="12">
             <Border.Background>
                 <SolidColorBrush Color="White" Opacity="0.8"/>
             </Border.Background>
@@ -272,10 +272,15 @@
                             <ui:FontIcon Icon="{x:Static ui:FluentSystemIcons.Folder_24_Regular}"/>
                         </ui:AppBarButton.Icon>
                     </ui:AppBarButton>
+                    <ui:AppBarButton Label="导出为图片" Name="SaveScreenshotButton" Click="SaveScreenshotButton_Click">
+                        <ui:AppBarButton.Icon>
+                            <ui:FontIcon Icon="{x:Static ui:FluentSystemIcons.ScreenCut_20_Regular}"/>
+                        </ui:AppBarButton.Icon>
+                    </ui:AppBarButton>
                 </ui:CommandBar.SecondaryCommands>
             </ui:CommandBar>
         </Border>
-        <Border VerticalAlignment="Bottom" HorizontalAlignment="Right" CornerRadius="16" Margin="12">
+        <Border x:Name="BottomRightBar" VerticalAlignment="Bottom" HorizontalAlignment="Right" CornerRadius="16" Margin="12">
             <Border.Background>
                 <SolidColorBrush Color="White" Opacity="0.8"/>
             </Border.Background>
@@ -292,6 +297,6 @@
                 </ui:CommandBar>
             </ikw:SimpleStackPanel>
         </Border>
-        <TextBlock HorizontalAlignment="Center" FontFamily="Segoe UI Variable Static Display,Segoe UI" VerticalAlignment="Bottom" Text="Version 1.2-patch1 | (c) Copyright CreeperMPG [292312] 2026-2026 | GitHub:CreeperMPG/GridBoard" Foreground="Gray" FontSize="5.5" Margin="2.5"/>
+        <TextBlock x:Name="VersionText" HorizontalAlignment="Center" FontFamily="Segoe UI Variable Static Display,Segoe UI" VerticalAlignment="Bottom" Foreground="Gray"/>
     </Grid>
 </Window>
