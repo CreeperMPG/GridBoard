@@ -1,6 +1,8 @@
 using iNKORE.UI.WPF.Modern;
 using iNKORE.UI.WPF.Modern.Common.IconKeys;
 using iNKORE.UI.WPF.Modern.Controls;
+using GridBoard.Board;
+using GridBoard.Mcp;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -38,6 +40,10 @@ namespace GridBoard
         public static extern bool SetCursorPos(int X, int Y);
         private Stack<StrokeCollection> _history = new Stack<StrokeCollection>();
         private const int MaxHistory = 50;
+
+        // 画布相对「上次成功保存」有没有改动：定时器和关窗只在脏的时候写盘，
+        // 免得每 2 分钟无脑重写一遍存档。
+        private bool _dirty;
         private readonly Dictionary<SelectedOptionType, (AppBarButton button, FontIcon icon, FontIconData regular, FontIconData filled, InkCanvasEditingMode editingMode)> _buttonConfigs;
         private static readonly Brush HighlightBrush = Brushes.DeepSkyBlue;
         private SelectedOptionType _selectedOption;
@@ -114,7 +120,7 @@ namespace GridBoard
         }
         private void Timer_Tick(object sender, EventArgs e)
         {
-            SaveInk();
+            SaveInkIfDirty();
         }
 
         private void PenButton_Click(object sender, RoutedEventArgs e)
@@ -154,11 +160,13 @@ namespace GridBoard
         private void AppCanvas_StrokeCollected(object sender, InkCanvasStrokeCollectedEventArgs e)
         {
             SaveStrokeHistory();
+            _dirty = true;
             RecoveryButton.IsEnabled = AppCanvas.Strokes.Count == 0;
         }
         private void AppCanvas_StrokeErased(object sender, RoutedEventArgs e)
         {
             SaveStrokeHistory();
+            _dirty = true;
             RecoveryButton.IsEnabled = AppCanvas.Strokes.Count == 0;
         }
         private void Undo()
@@ -285,6 +293,8 @@ namespace GridBoard
                 if (brush != null)
                 {
                     AppCanvas.DefaultDrawingAttributes.Color = brush.Color;
+                    // 用户自己挑了调色板颜色 → 「Agent 选择的颜色」那行立刻收起
+                    HideAgentColor();
                 }
             }
         }
@@ -325,7 +335,7 @@ namespace GridBoard
         private void MinimizeButton_Click(object sender, RoutedEventArgs e)
         {
             WindowState = WindowState.Minimized;
-            SaveInk();
+            SaveInkIfDirty();
             if (_isDown)
             {
                 ToggleTransform();
@@ -344,54 +354,129 @@ namespace GridBoard
                 Directory.CreateDirectory(folder);
             return Path.Combine(folder, "save");
         }
+        /// <summary>
+        /// 保存笔迹。写临时文件 → 强制落盘 → 原子替换，断电时只会留下完整的旧档或完整的新档，
+        /// 不会出现被截断的半截存档。被替换下来的旧档自动留成 save.bak。
+        /// </summary>
         public bool SaveInk()
         {
+            // 空板不覆盖存档：这样「恢复清屏」还能把清屏前的内容找回来
+            if (AppCanvas.Strokes.Count == 0)
+                return true;
+
+            string filePath = GetStoragePath();
+            string tempPath = filePath + ".tmp";
+            string backupPath = filePath + ".bak";
+
             try
             {
-                if (AppCanvas.Strokes.Count != 0)
+                // 先在内存里序列化好：这样不管 StrokeCollection.Save 是否动过流，
+                // 写文件那一步都是我们自己的完整字节
+                byte[] payload;
+                using (var buffer = new MemoryStream())
                 {
-                    string filePath = GetStoragePath();
-                    using (FileStream fs = new FileStream(filePath, FileMode.Create))
-                    {
-                        // 将 InkCanvas 的所有笔画序列化到文件
-                        AppCanvas.Strokes.Save(fs);
-                    }
-                    LastSaved.Text = "上次保存\n" + DateTime.Now.ToString("HH:mm:ss");
+                    // 将 InkCanvas 的所有笔画序列化到文件
+                    AppCanvas.Strokes.Save(buffer);
+                    payload = buffer.ToArray();
                 }
+
+                using (FileStream fs = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                {
+                    fs.Write(payload, 0, payload.Length);
+
+                    // using 结束只是把数据交给系统缓存；断电时缓存里的东西会没。
+                    // Flush(true) 才是真正写进磁盘。
+                    fs.Flush(true);
+                }
+
+                if (File.Exists(filePath))
+                {
+                    // 原子替换：同一卷上要么旧档完整、要么新档完整
+                    File.Replace(tempPath, filePath, backupPath, true);
+                }
+                else
+                {
+                    File.Move(tempPath, filePath);
+                }
+
+                _dirty = false;
+                LastSaved.Text = "上次保存\n" + DateTime.Now.ToString("HH:mm:ss");
                 return true;
             }
             catch
             {
+                TryDeleteFile(tempPath);
                 LastSaved.Text = "保存失败";
                 return false;
             }
         }
+
+        /// <summary>只在画布有改动时保存；定时器和关窗走这个。</summary>
+        private void SaveInkIfDirty()
+        {
+            if (_dirty)
+                SaveInk();
+        }
+
         public void LoadInk()
         {
+            string filePath = GetStoragePath();
+
+            if (TryLoadInk(filePath, null))
+                return;
+
+            // 主存档坏了（断电、磁盘满…）就用上一次保存时的备份
+            if (TryLoadInk(filePath + ".bak", "已从备份恢复 {0} 条笔迹"))
+                return;
+
+            if (File.Exists(filePath) || File.Exists(filePath + ".bak"))
+                LastSaved.Text = "存档读取失败";
+        }
+
+        /// <summary>
+        /// 读一个存档文件。文件不存在或内容损坏时返回 false，不抛异常。
+        /// </summary>
+        private bool TryLoadInk(string path, string successFormat)
+        {
+            if (!File.Exists(path))
+                return false;
+
             try
             {
-                string filePath = GetStoragePath();
-                if (!File.Exists(filePath))
-                {
-                    return;
-                }
-
-                using (FileStream fs = new FileStream(filePath, FileMode.Open))
+                using (FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
                 {
                     // 从文件流创建 StrokeCollection 并赋值给 InkCanvas
                     AppCanvas.Strokes = new StrokeCollection(fs);
                 }
-                LastSaved.Text = $"已加载 {AppCanvas.Strokes.Count} 条笔迹";
+
+                _dirty = false;
+                LastSaved.Text = successFormat == null
+                    ? string.Format("已加载 {0} 条笔迹", AppCanvas.Strokes.Count)
+                    : string.Format(successFormat, AppCanvas.Strokes.Count);
+                return true;
             }
             catch
             {
+                return false;
+            }
+        }
+
+        private static void TryDeleteFile(string path)
+        {
+            try
+            {
+                if (File.Exists(path))
+                    File.Delete(path);
+            }
+            catch
+            {
+                // 删不掉就留着，下次保存会被覆盖
             }
         }
         private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
         {
-            //SaveInk();
-            //Trace.WriteLine("112");
-            //Application.Current.Shutdown();
+            // 关窗口前把没保存的改动写掉（以前这里是注释掉的，会丢最多 2 分钟）
+            SaveInkIfDirty();
         }
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
@@ -405,6 +490,8 @@ namespace GridBoard
             Width = SystemParameters.PrimaryScreenWidth;
             Height = SystemParameters.PrimaryScreenHeight;
             Topmost = false;
+
+            TryStartMcpServer();
         }
 
         private void RecoveryButton_Click(object sender, RoutedEventArgs e)
@@ -603,7 +690,7 @@ namespace GridBoard
 
             return ApplyViewState();
         }
-        public static readonly string Version = "1.2.1";
+        public static readonly string Version = "1.4.0";
         private void SetCopyrightTextState(bool exporting)
         {
             if (exporting)
@@ -615,10 +702,107 @@ namespace GridBoard
             }
             else
             {
-                VersionText.Text = $"Version {Version} | (c) Copyright CreeperMPG [292312] 2026-2026 | GitHub:CreeperMPG/GridBoard";
+                VersionText.Text = $"Version {Version} | (c) Copyright CreeperMPG | GitHub:CreeperMPG/GridBoard";
                 VersionText.FontSize = 5.5;
                 VersionText.Margin = new Thickness(2.5);
             }
+        }
+
+        // ==================== MCP 服务 ====================
+        //
+        // 两个工具：board_set_color（改笔色）、board_screenshot（截图）。
+        // 端点配置在 %APPDATA%\GridBoard\mcp.json；启不来只记日志 + 状态提示，不影响黑板本身。
+
+        private GridBoardMcpServer _mcpServer;
+        private McpEndpointSettings _mcpSettings;
+        private string _mcpStartError;
+
+        private void TryStartMcpServer()
+        {
+            _mcpSettings = McpEndpointSettings.Load();
+            if (!_mcpSettings.Enabled)
+                return;
+
+            try
+            {
+                _mcpServer = new GridBoardMcpServer(new BoardService(this), _mcpSettings);
+                _mcpServer.Start();
+            }
+            catch (Exception ex)
+            {
+                GridBoardMcpServer.Log("MCP 服务启动失败：" + ex);
+                _mcpServer = null;
+                _mcpStartError = ex.Message;
+            }
+        }
+
+        /// <summary>
+        /// 凑一份状态快照给对话框：服务在跑就用它自己的统计，
+        /// 没在跑（未启用 / 启动失败）也要能说清楚为什么。
+        /// </summary>
+        private McpStatusSnapshot BuildMcpStatus()
+        {
+            if (_mcpServer != null)
+                return _mcpServer.GetStatus();
+
+            int port = _mcpSettings != null ? _mcpSettings.Port : McpEndpointSettings.DefaultPort;
+
+            string label = "未启用";
+            string detail = "mcp.json 里 Enabled = false";
+            if (!string.IsNullOrEmpty(_mcpStartError))
+            {
+                label = "启动失败";
+                detail = _mcpStartError;
+            }
+
+            return new McpStatusSnapshot
+            {
+                Running = false,
+                StateLabel = label,
+                StateDetail = detail,
+                Endpoint = "http://127.0.0.1:" + port + "/mcp",
+                TokenRequired = _mcpSettings != null && !string.IsNullOrEmpty(_mcpSettings.Token),
+                TotalCalls = 0,
+                FailedCalls = 0,
+                Calls = new List<McpCallRecord>(),
+                ConfigPath = McpEndpointSettings.FilePath,
+                LogPath = GridBoardMcpServer.LogFilePath
+            };
+        }
+
+        private async void McpStatusButton_Click(object sender, RoutedEventArgs e)
+        {
+            await McpStatusDialog.ShowAsync(this, BuildMcpStatus());
+        }
+
+        /// <summary>
+        /// 截图用：临时收起底部浮层与版本号（MCP 的 show_toolbar=false）。
+        /// 与「导出为图片」不同，这里不动视图状态，也不改版权文字。
+        /// </summary>
+        internal void SetFloatingUiVisible(bool visible)
+        {
+            Visibility state = visible ? Visibility.Visible : Visibility.Collapsed;
+            BottomToolbar.Visibility = state;
+            BottomLeftBar.Visibility = state;
+            BottomRightBar.Visibility = state;
+            VersionText.Visibility = state;
+        }
+
+        // ==================== 笔刷浮层里的「Agent 选择的颜色」 ====================
+        //
+        // 笔色不在 12 色调色板里时（只有 Agent 会设这种颜色），浮层里在色块选择器上方多一行：
+        // 左边文字「Agent 选择的颜色」、右边一个 30×30 的色块。
+        // 反过来，只要笔色回到调色板里（Agent 设了调色板色，或用户自己点了色块），这行就收起。
+
+        internal void ShowAgentColor(Color color)
+        {
+            AgentColorChip.Background = new SolidColorBrush(color);
+            AgentColorRow.Visibility = Visibility.Visible;
+        }
+
+        internal void HideAgentColor()
+        {
+            AgentColorRow.Visibility = Visibility.Collapsed;
         }
 
         // ==================== 导出为图片 ====================
@@ -663,7 +847,7 @@ namespace GridBoard
                 await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);
 
                 // 4. 截窗
-                RenderTargetBitmap bmp = CaptureWindow();
+                RenderTargetBitmap bmp = CaptureWindowBitmap();
 
                 // 5. 选路径 + 写盘（取消则什么都不做，直接走 finally）
                 SaveScreenshot(bmp);
@@ -687,8 +871,9 @@ namespace GridBoard
         /// 按屏幕物理分辨率截取整个窗口。
         /// 像素尺寸与 DPI 必须配套：像素 = DIP × 缩放、dpi = 96 × 缩放 ——
         /// 这样画布的 DIP 范围正好铺满位图，150% 缩放下也不会截出糊图。
+        /// 预览截图（MCP 的 board_screenshot）也走这里，所以标 internal。
         /// </summary>
-        private RenderTargetBitmap CaptureWindow()
+        internal RenderTargetBitmap CaptureWindowBitmap()
         {
             DpiScale dpi = VisualTreeHelper.GetDpi(this);
             int pxW = (int)Math.Round(ActualWidth * dpi.DpiScaleX);
@@ -747,6 +932,11 @@ namespace GridBoard
 
         private void Window_Closed(object sender, EventArgs e)
         {
+            if (_mcpServer != null)
+            {
+                _mcpServer.Dispose();
+                _mcpServer = null;
+            }
             App._lockStream?.Dispose();
             Environment.Exit(0);
         }

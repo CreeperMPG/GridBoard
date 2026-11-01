@@ -92,7 +92,7 @@
                        Margin="12"/>
             </Border>
         </Grid>
-        <Border x:Name="BottomToolbar" VerticalAlignment="Bottom" HorizontalAlignment="Center" CornerRadius="16" Margin="12">
+        <Border x:Name="BottomToolbar" MaxHeight="64" VerticalAlignment="Bottom" HorizontalAlignment="Center" CornerRadius="16" Margin="12">
             <Border.Background>
                 <SolidColorBrush Color="White" Opacity="0.8"/>
             </Border.Background>
@@ -131,35 +131,51 @@
                                         <ui:FontIcon Icon="{x:Static ui:FluentSystemIcons.InkStroke_24_Filled}" Tag="2"/>
                                         <ui:FontIcon Icon="{x:Static ui:FluentSystemIcons.InkStroke_24_Filled}" FontWeight="Bold" Tag="3"/>
                                     </ui:GridView>
-                                    <ui:GridView Grid.Column="2" Grid.Row="1" SelectedIndex="0" Name="ColorSelector" IsItemClickEnabled="True" ItemClick="ColorSelector_ItemClick">
-                                        <ui:GridView.ItemsPanel>
-                                            <ItemsPanelTemplate>
-                                                <UniformGrid Columns="4" />
-                                            </ItemsPanelTemplate>
-                                        </ui:GridView.ItemsPanel>
-                                        <ui:GridView.Resources>
-                                            <Style TargetType="Rectangle">
-                                                <Setter Property="Width" Value="30" />
-                                                <Setter Property="Height" Value="30" />
-                                                <Setter Property="RadiusX" Value="4" />
-                                                <Setter Property="RadiusY" Value="4" />
-                                            </Style>
-                                        </ui:GridView.Resources>
-                                        <ui:GridView.Items>
-                                            <Rectangle Fill="White"/>
-                                            <Rectangle Fill="Red"/>
-                                            <Rectangle Fill="Orange"/>
-                                            <Rectangle Fill="Yellow"/>
-                                            <Rectangle Fill="Green"/>
-                                            <Rectangle Fill="Blue"/>
-                                            <Rectangle Fill="Indigo"/>
-                                            <Rectangle Fill="Violet"/>
-                                            <Rectangle Fill="Gray"/>
-                                            <Rectangle Fill="SkyBlue"/>
-                                            <Rectangle Fill="LightGreen"/>
-                                            <Rectangle Fill="Chocolate"/>
-                                        </ui:GridView.Items>
-                                    </ui:GridView>
+                                    <!-- 颜色列：Agent 设的颜色如果不在调色板里，选择器上方顶一行提示；
+                                         用户在下面自己点了任何色块，这一行立刻收起（见 ColorSelector_ItemClick） -->
+                                    <Grid Grid.Column="2" Grid.Row="1">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <Grid Name="AgentColorRow" Grid.Row="0" Height="30" Margin="0,0,0,8" Visibility="Collapsed">
+                                            <TextBlock Text="Agent 选择的颜色"
+                                                       VerticalAlignment="Center" HorizontalAlignment="Left"
+                                                       Margin="8,0,0,0" FontSize="12" Foreground="#FF5F5F5F"/>
+                                            <Border Name="AgentColorChip" HorizontalAlignment="Right"
+                                                    Width="30" Height="30" CornerRadius="4"
+                                                    BorderThickness="1" BorderBrush="#33000000"/>
+                                        </Grid>
+                                        <ui:GridView Grid.Row="1" SelectedIndex="0" Name="ColorSelector" IsItemClickEnabled="True" ItemClick="ColorSelector_ItemClick">
+                                            <ui:GridView.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <UniformGrid Columns="4" />
+                                                </ItemsPanelTemplate>
+                                            </ui:GridView.ItemsPanel>
+                                            <ui:GridView.Resources>
+                                                <Style TargetType="Rectangle">
+                                                    <Setter Property="Width" Value="30" />
+                                                    <Setter Property="Height" Value="30" />
+                                                    <Setter Property="RadiusX" Value="4" />
+                                                    <Setter Property="RadiusY" Value="4" />
+                                                </Style>
+                                            </ui:GridView.Resources>
+                                            <ui:GridView.Items>
+                                                <Rectangle Fill="White"/>
+                                                <Rectangle Fill="Red"/>
+                                                <Rectangle Fill="Orange"/>
+                                                <Rectangle Fill="Yellow"/>
+                                                <Rectangle Fill="Green"/>
+                                                <Rectangle Fill="Blue"/>
+                                                <Rectangle Fill="Indigo"/>
+                                                <Rectangle Fill="Violet"/>
+                                                <Rectangle Fill="Gray"/>
+                                                <Rectangle Fill="SkyBlue"/>
+                                                <Rectangle Fill="LightGreen"/>
+                                                <Rectangle Fill="Chocolate"/>
+                                            </ui:GridView.Items>
+                                        </ui:GridView>
+                                    </Grid>
                                 </Grid>
                             </ui:Flyout>
                         </ui:FlyoutService.Flyout>
@@ -249,7 +265,7 @@
                 </ui:CommandBar.PrimaryCommands>
             </ui:CommandBar>
         </Border>
-        <Border x:Name="BottomLeftBar" VerticalAlignment="Bottom" HorizontalAlignment="Left" CornerRadius="16" Margin="12">
+        <Border x:Name="BottomLeftBar" MaxHeight="64" VerticalAlignment="Bottom" HorizontalAlignment="Left" CornerRadius="16" Margin="12">
             <Border.Background>
                 <SolidColorBrush Color="White" Opacity="0.8"/>
             </Border.Background>
@@ -277,10 +293,15 @@
                             <ui:FontIcon Icon="{x:Static ui:FluentSystemIcons.ScreenCut_20_Regular}"/>
                         </ui:AppBarButton.Icon>
                     </ui:AppBarButton>
+                    <ui:AppBarButton Label="MCP服务器状态" Name="McpStatusButton" Click="McpStatusButton_Click">
+                        <ui:AppBarButton.Icon>
+                            <ui:FontIcon Icon="{x:Static ui:FluentSystemIcons.Server_24_Regular}"/>
+                        </ui:AppBarButton.Icon>
+                    </ui:AppBarButton>
                 </ui:CommandBar.SecondaryCommands>
             </ui:CommandBar>
         </Border>
-        <Border x:Name="BottomRightBar" VerticalAlignment="Bottom" HorizontalAlignment="Right" CornerRadius="16" Margin="12">
+        <Border x:Name="BottomRightBar" MaxHeight="64" VerticalAlignment="Bottom" HorizontalAlignment="Right" CornerRadius="16" Margin="12">
             <Border.Background>
                 <SolidColorBrush Color="White" Opacity="0.8"/>
             </Border.Background>
